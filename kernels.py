@@ -4,6 +4,7 @@ import numpy as np
 from pylab import *
 from numpy.random import multivariate_normal as mvnrand
 
+# ToDo matplotlibで書き換え
 xmax = 5
 xmin = -5
 ymax = 5
