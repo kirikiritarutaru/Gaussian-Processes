@@ -1,4 +1,3 @@
-import sys
 import numpy as np
 from numpy.linalg import inv
 import matplotlib.pyplot as plt
@@ -21,8 +20,9 @@ def linear_model(data, weight):
     return[np.dot(weight, phi(x))for x in data]
 
 
+# 入力： 線形モデル回帰とリッジ回帰を切り替えフラグ
 def main(lm_or_rm):
-    data = np.loadtxt(sys.argv[1])
+    data = np.loadtxt("nonlinear.dat")
 
     # X:入力データの特徴ベクトル
     X = np.array([phi(x) for x in data.T[0]])
