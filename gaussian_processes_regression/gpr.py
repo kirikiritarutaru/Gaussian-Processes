@@ -20,7 +20,7 @@ def kv(x, xtrain):
 
 
 def kgauss(x, y):
-    return tau * np.exp(- (x - y)**2 / (2 * sigma * sigma))
+    return tau * np.exp(- (x - y)**2 / sigma**2)
 
 
 def gpr(xx, xtrain, ytrain):
@@ -47,7 +47,6 @@ def main():
     ytrain = train.T[1]
 
     xx = np.linspace(xmin, xmax, N)
-    x, y = np.meshgrid(xx, xx)
 
     x_list = []
     y_list = []
@@ -55,6 +54,7 @@ def main():
         x_list.append(xt)
         y_list.append(yt)
         ypr, spr = gpr(xx, x_list, y_list)
+
         plt.figure(figsize=(10, 5))
         plt.plot(xx, ypr)
         plt.fill_between(
