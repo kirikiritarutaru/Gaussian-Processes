@@ -5,12 +5,10 @@
 #    $Id: gplvm.py,v 1.12 2018/03/30 09:52:38 daichi Exp $
 #
 import sys
-import putil
 import numpy as np
-from pylab import *
 from numpy.linalg import det, inv
 from scipy.optimize import minimize, fmin_l_bfgs_b
-from scg import SCG
+# from scg import SCG
 from opts import getopts
 from printf import eprint
 
@@ -31,21 +29,21 @@ def logdet(A):
 def kgauss(params):
     [tau, sigma, eta] = params
     return (lambda x, y:
-            exp(tau) * exp(- np.dot(x-y, x-y) / exp(sigma)) +
-            (exp(eta) if all(x == y) else 0))
+            np.exp(tau) * np.exp(- np.dot(x-y, x-y) / np.exp(sigma)) +
+            (np.exp(eta) if all(x == y) else 0))
 
 
 def kgaussm(X, params):
     [tau, sigma, eta] = params
     N = len(X)
-    x = sum(X**2, 1)
+    x = np.sum(X**2, 1)
     K = np.tile(x, (N, 1)) + np.tile(x, (N, 1)).T - 2 * np.dot(X, X.T)
-    return exp(tau) * exp(- K / exp(sigma)) + exp(eta) * np.eye(N)
+    return np.exp(tau) * np.exp(- K / np.exp(sigma)) + np.exp(eta) * np.eye(N)
 
 
 def crossprod(X):
     N = len(X)
-    x = sum(X**2, 1)
+    x = np.sum(X**2, 1)
     return np.tile(x, (N, 1)) + np.tile(x, (N, 1)).T - 2 * np.dot(X, X.T)
 
 
@@ -65,12 +63,10 @@ def gplvmlik(xx, Y, L, kernel, init):
     params = xx[0:H]
     X = xx[H:].reshape(N, L)
     K = kernel_matrix(X, kernel, params)
-    val = (N * D * log(2*pi) + D * logdet(K) +
+    val = (N * D * np.log(2*pi) + D * np.logdet(K) +
            tr(inv(K), np.dot(Y, Y.T))) / (2 * N)
     eprint('gplvmlik = %.04f' % val)
     return val
-    # return (N * D * log (2*pi) + D * logdet(K) +
-    #         tr(inv(K), np.dot(Y,Y.T))) / 2
 
 
 def gplvmgrad(xx, Y, L, kernel, init):
@@ -80,18 +76,18 @@ def gplvmgrad(xx, Y, L, kernel, init):
     X = xx[H:].reshape(N, L)
     G = np.zeros([N, L])
     K = kernel_matrix(X, kernel, params)
-    IK = inv(K)
+    IK = np.inv(K)
     LK = D * IK - np.dot(IK, Y).dot(Y.T).dot(IK)
     # gradients for hyperparameters
     [tau, sigma, eta] = params
-    ga = sum(LK * (K - exp(eta) * np.eye(N)))
-    gb = sum(LK * K * crossprod(X)) / exp(sigma)
-    gc = sum(diag(LK)) * exp(eta)
+    ga = np.sum(LK * (K - exp(eta) * np.eye(N)))
+    gb = np.sum(LK * K * crossprod(X)) / exp(sigma)
+    gc = np.sum(diag(LK)) * exp(eta)
     # gradients for latents
     for n in range(N):
         for i in range(L):
-            G[n, i] = - 4 * sum(LK[n] * (X[n, i] - X[:, i])
-                                * K[n]) / exp(sigma)
+            G[n, i] = - 4 * np.sum(LK[n] * (X[n, i] - X[:, i])
+                                   * K[n]) / exp(sigma)
     return np.hstack(([ga, gb, gc], G.ravel())) / (2 * N)
 
 
@@ -125,13 +121,13 @@ def numgrad_x(X, Y, L, kernel, params, eps=1e-6):
 
 def gplvm(Y, L, kernel, optimizer):
     # normalize data
-    Y = (Y-mean(Y, 0)) / sqrt(var(Y, 0))
+    Y = (Y-np.mean(Y, 0)) / np.sqrt(var(Y, 0))
     # initialize X
-    U, S, V = svd(Y)
+    U, S, V = np.svd(Y)
     X = U[:, :L] / 10
     N = len(Y)
     # kernel hyperparameter
-    init = [log(1), log(0.1), log(1e-2)]
+    init = [np.log(1), np.log(0.1), np.log(1e-2)]
     # optimize log likelihood
     print('optimizing: optimizer = %s' % optimizer)
     if optimizer in optimizers:
@@ -144,19 +140,26 @@ def gplvm(Y, L, kernel, optimizer):
 
 def optimize_lbfgs(X, Y, L, kernel, init):
     H = len(init)
-    x, f, d = fmin_l_bfgs_b(gplvmlik, np.hstack((init, X.ravel())),
-                            fprime=gplvmgrad,
-                            args=[Y, L, kernel, init],
-                            iprint=0, maxiter=1000)
+    x, f, d = fmin_l_bfgs_b(
+        gplvmlik,
+        np.hstack((init, X.ravel())),
+        fprime=gplvmgrad,
+        args=[Y, L, kernel, init],
+        iprint=0,
+        maxiter=1000
+    )
     return x[H:]
 
 
 def optimize_bfgs(X, Y, L, kernel, init):
     H = len(init)
-    res = minimize(gplvmlik, np.hstack((init, X.ravel())),
-                   args=(Y, L, kernel, init), jac=gplvmgrad,
-                   method='BFGS',  # callback = printparam,
-                   options={'gtol': 1e-4, 'disp': True})
+    res = minimize(
+        gplvmlik, np.hstack((init, X.ravel())),
+        args=(Y, L, kernel, init),
+        jac=gplvmgrad,
+        method='BFGS',  # callback = printparam,
+        options={'gtol': 1e-4, 'disp': True}
+    )
     print(res.message)
     print('init           =', np.array(init))
     print('hyperparameter =', res.x[0:H])
@@ -165,9 +168,12 @@ def optimize_bfgs(X, Y, L, kernel, init):
 
 def optimize_scg(X, Y, L, kernel, init):
     H = len(init)
-    x, flog, feval, status = SCG(gplvmlik, gplvmgrad,
-                                 np.hstack((init, X.ravel())),
-                                 optargs=[Y, L, kernel, init])
+    x, flog, feval, status = SCG(
+        gplvmlik,
+        gplvmgrad,
+        np.hstack((init, X.ravel())),
+        optargs=[Y, L, kernel, init]
+    )
     print(status)
     print('init           =', exp(np.array(init)))
     print('hyperparameter =', exp(x[0:H]))
@@ -204,9 +210,15 @@ def usage():
 
 
 def main():
-    options, args = getopts(["L|latents=", "o|optimizer=", "l|labels=",
-                             "h|help"])
-    optimizer = 'scg'
+    options, args = getopts(
+        [
+            "L|latents=",
+            "o|optimizer=",
+            "l|labels=",
+            "h|help"
+        ]
+    )
+    optimizer = 'bfgs'
     kernel = kgauss
     labels = []
     L = 2
@@ -225,9 +237,7 @@ def main():
     latents = gplvm(data, L, kernel, optimizer)
 
     plot_latents(latents, labels)
-    if (len(args) > 1):
-        putil.savefig(args[1])
-    show()
+    plt.show()
 
 
 if __name__ == "__main__":
